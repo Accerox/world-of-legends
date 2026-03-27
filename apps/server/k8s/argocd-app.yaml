@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-game-wol
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Accerox/world-of-legends.git
+    targetRevision: main
+    path: apps/server/k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: wol-game
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true

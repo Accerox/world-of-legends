@@ -1,0 +1,23 @@
+{
+  "name": "@wol/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^7.36.0",
+    "@babylonjs/loaders": "^7.36.0",
+    "@babylonjs/materials": "^7.36.0",
+    "@babylonjs/gui": "^7.36.0",
+    "@wol/shared": "*"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0",
+    "typescript": "^5.7.0"
+  }
+}
