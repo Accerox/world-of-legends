@@ -49,7 +49,7 @@ export async function createAnimatedAvatar(
   const root = new TransformNode(`avatar_root_${playerId}`, scene)
   const modelPivot = new TransformNode(`avatar_pivot_${playerId}`, scene)
   modelPivot.parent = root
-  modelPivot.rotation.y = Math.PI // Models face -Z, game uses +Z forward
+  modelPivot.rotation.y = 0 // GLB models face +Z (glTF convention), same as game forward
 
   // Load all animation GLBs — each has its own model + animation
   const raceUrl = `${ASSETS_URL}/models/races/`
