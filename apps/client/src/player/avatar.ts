@@ -119,11 +119,23 @@ export async function createAnimatedAvatar(
           raceBones.set(baseName, node)
         })
 
-        for (const anim of cloned.targetedAnimations) {
-          const targetName = (anim.target as TransformNode).name?.replace(`_IdleAnim_${playerId}`, '') || ''
+        // Retarget animation channels, stripping scale channels.
+        // idle.glb has baked Hips scale=1.176 from a different Mixamo source
+        // character, causing a 17.6% size increase if applied to race models.
+        // Mixamo doesn't use scale for actual animation — it's purely compensatory.
+        for (let i = cloned.targetedAnimations.length - 1; i >= 0; i--) {
+          const ta = cloned.targetedAnimations[i]
+
+          // Remove scale channels to prevent size mismatch
+          if (ta.animation.targetProperty === 'scaling') {
+            cloned.targetedAnimations.splice(i, 1)
+            continue
+          }
+
+          const targetName = (ta.target as TransformNode).name?.replace(`_IdleAnim_${playerId}`, '') || ''
           const raceTarget = raceBones.get(targetName)
           if (raceTarget) {
-            anim.target = raceTarget
+            ta.target = raceTarget
           }
         }
 
