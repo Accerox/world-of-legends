@@ -56,7 +56,7 @@ export async function createAnimatedAvatar(
   const animUrl = `${ASSETS_URL}/models/animations/`
 
   const animSources: { name: string; url: string; file: string; loop: boolean; speed: number }[] = [
-    { name: 'Idle', url: raceUrl, file: `${race}-rigged.glb`, loop: true, speed: 1.0 },
+    { name: 'Idle', url: animUrl, file: 'idle.glb', loop: true, speed: 1.0 },
     { name: 'Walking', url: raceUrl, file: `${race}-walk.glb`, loop: true, speed: 1.0 },
     { name: 'Running', url: raceUrl, file: `${race}-run.glb`, loop: true, speed: 1.0 },
     { name: 'WalkingBack', url: raceUrl, file: `${race}-walk.glb`, loop: true, speed: -1.0 },
