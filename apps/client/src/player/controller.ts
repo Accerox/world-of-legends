@@ -147,11 +147,11 @@ export function setupController(
 
     // Q/E removed — strafe only with right-click + A/D
 
-    // Jump
+    // Jump — physics handles vertical movement; keep current animation playing
+    // to avoid model-swap pop (jump.glb uses a generic model, not the race model)
     if (keys[' '] && state.isGrounded) {
       state.velocityY = JUMP_FORCE
       state.isGrounded = false
-      if (avatar) avatar.playJump()
     }
 
     // Gravity

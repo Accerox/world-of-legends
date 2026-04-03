@@ -59,8 +59,7 @@ export async function createAnimatedAvatar(
     { name: 'Idle', url: raceUrl, file: `${race}-rigged.glb`, loop: true, speed: 1.0 },
     { name: 'Walking', url: raceUrl, file: `${race}-walk.glb`, loop: true, speed: 1.0 },
     { name: 'Running', url: raceUrl, file: `${race}-run.glb`, loop: true, speed: 1.0 },
-    { name: 'WalkingBack', url: animUrl, file: 'walkback.glb', loop: true, speed: 1.0 },
-    { name: 'Jump', url: animUrl, file: 'jump.glb', loop: false, speed: 1.2 },
+    { name: 'WalkingBack', url: raceUrl, file: `${race}-walk.glb`, loop: true, speed: -1.0 },
     { name: 'Attack', url: animUrl, file: 'attack.glb', loop: false, speed: 1.5 },
     { name: 'Dance', url: animUrl, file: 'dance.glb', loop: true, speed: 1.0 },
     { name: 'Death', url: animUrl, file: 'death.glb', loop: false, speed: 1.0 },
@@ -131,8 +130,17 @@ export async function createAnimatedAvatar(
     // Show new
     newSlot.rootNode.setEnabled(true)
     if (newSlot.animGroup) {
-      newSlot.animGroup.speedRatio = newSlot.speed
-      newSlot.animGroup.start(newSlot.loop)
+      const absSpeed = Math.abs(newSlot.speed)
+      newSlot.animGroup.speedRatio = absSpeed
+
+      if (newSlot.speed < 0) {
+        // Reverse playback: start from end frame, play toward start frame
+        const from = newSlot.animGroup.to
+        const to = newSlot.animGroup.from
+        newSlot.animGroup.start(newSlot.loop, absSpeed, from, to)
+      } else {
+        newSlot.animGroup.start(newSlot.loop)
+      }
 
       // For non-looping animations, return to idle when done
       if (!newSlot.loop) {
@@ -152,7 +160,7 @@ export async function createAnimatedAvatar(
     playWalkBack: () => switchTo('WalkingBack'),
     playStrafeLeft: () => switchTo('Walking'),
     playStrafeRight: () => switchTo('Walking'),
-    playJump: () => switchTo('Jump'),
+    playJump: () => { /* no-op: physics handles jump visually, keep current animation */ },
     playAttack: () => switchTo('Attack'),
     playDance: () => switchTo('Dance'),
 
