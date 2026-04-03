@@ -92,6 +92,19 @@ export function setupController(
     }
   })
 
+  // Safety: clear all keys when window loses focus — prevents stuck movement
+  // when keyup is missed (e.g., right-click during jump, tab switch, pointer lock change)
+  window.addEventListener('blur', () => {
+    for (const key in state.keys) state.keys[key] = false
+    state.isRunning = false
+  })
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      for (const key in state.keys) state.keys[key] = false
+      state.isRunning = false
+    }
+  })
+
   // Chat input may not exist yet — retry until found
   const bindChatInput = () => {
     const chatInput = document.getElementById('chat-input')
