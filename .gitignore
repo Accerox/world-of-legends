@@ -28,3 +28,18 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Binary assets (stored in Cloudflare R2, not in git)
+# Access via: https://wol-assets.lucas-i-carrizo.workers.dev/{path}
+apps/client/public/models/
+apps/client/public/textures/
+apps/client/public/audio/
+apps/client/public/concepts/
+*.glb
+*.fbx
+*.obj
+*.png
+*.jpg
+*.mp3
+*.wav
+*.ogg

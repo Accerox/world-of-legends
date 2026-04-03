@@ -13,12 +13,16 @@
     "express": "^4.21.0",
     "ws": "^8.18.0",
     "cors": "^2.8.5",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
     "@wol/shared": "*"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/ws": "^8.5.0",
     "@types/cors": "^2.8.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.7",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }

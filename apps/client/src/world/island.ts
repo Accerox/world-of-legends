@@ -2,10 +2,8 @@ import { Scene } from '@babylonjs/core/scene'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer'
 import { Texture } from '@babylonjs/core/Materials/Textures/texture'
-import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
-import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData'
-import type { GroundMesh } from '@babylonjs/core/Meshes/groundMesh'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 
 const ISLAND_SIZE = 200
@@ -43,10 +41,17 @@ export function getHeightAtPosition(x: number, z: number): number {
 }
 
 /**
- * Create the island terrain mesh with procedural heightmap.
+ * Linearly interpolate between two values.
+ */
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t
+}
+
+/**
+ * Create the island terrain mesh with procedural heightmap and vertex coloring.
  */
 export function createIsland(scene: Scene): Mesh {
-  // Create a flat ground mesh
+  // Create a flat ground mesh with enough subdivisions for smooth vertex coloring
   const ground = MeshBuilder.CreateGround(
     'island',
     {
@@ -59,56 +64,104 @@ export function createIsland(scene: Scene): Mesh {
   )
 
   // Apply heightmap by modifying vertex positions
-  const positions = ground.getVerticesData('position')
-  if (positions) {
-    for (let i = 0; i < positions.length; i += 3) {
-      const x = positions[i]
-      const z = positions[i + 2]
-      positions[i + 1] = getHeightAtPosition(x, z)
-    }
-
-    ground.updateVerticesData('position', positions)
-    ground.createNormals(false) // Recalculate normals
+  const positions = ground.getVerticesData(VertexBuffer.PositionKind)
+  if (!positions) {
+    throw new Error('Failed to get ground vertex positions')
   }
 
-  // Create terrain material with procedural texture
-  const material = new StandardMaterial('islandMat', scene)
-  const terrainTexture = createTerrainTexture(scene)
-  material.diffuseTexture = terrainTexture
-  material.specularColor = new Color3(0.1, 0.1, 0.1)
-  ground.material = material
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i]
+    const z = positions[i + 2]
+    positions[i + 1] = getHeightAtPosition(x, z)
+  }
 
+  ground.updateVerticesData(VertexBuffer.PositionKind, positions)
+  ground.createNormals(false) // Recalculate normals
+
+  // ─── Procedural vertex coloring based on height ───────────────────────────
+  const colors: number[] = []
+
+  // Color palette
+  const sandColor = { r: 0.76, g: 0.70, b: 0.50 }
+  const grassColor = { r: 0.22, g: 0.58, b: 0.18 }
+  const darkGrassColor = { r: 0.15, g: 0.42, b: 0.12 }
+  const rockyColor = { r: 0.50, g: 0.45, b: 0.38 }
+  const peakColor = { r: 0.60, g: 0.58, b: 0.55 }
+
+  // Height thresholds
+  const SAND_MAX = 0.5
+  const GRASS_START = 0.5
+  const GRASS_END = 3.0
+  const DARK_GRASS_END = 6.0
+  const ROCKY_END = 10.0
+
+  for (let i = 0; i < positions.length; i += 3) {
+    const y = positions[i + 1] // height
+    const x = positions[i]
+    const z = positions[i + 2]
+
+    // Add subtle noise to color transitions for natural look
+    const colorNoise = (Math.sin(x * 0.3 + z * 0.2) * 0.5 + 0.5) * 0.08
+
+    let r: number, g: number, b: number
+
+    if (y < SAND_MAX) {
+      // Sand near water level
+      r = sandColor.r + colorNoise
+      g = sandColor.g + colorNoise * 0.5
+      b = sandColor.b - colorNoise
+    } else if (y < GRASS_END) {
+      // Blend from sand to grass
+      const t = Math.min(1, (y - GRASS_START) / (GRASS_END - GRASS_START))
+      r = lerp(sandColor.r, grassColor.r, t) + colorNoise * 0.5
+      g = lerp(sandColor.g, grassColor.g, t) + colorNoise * 0.3
+      b = lerp(sandColor.b, grassColor.b, t)
+    } else if (y < DARK_GRASS_END) {
+      // Blend from grass to dark grass
+      const t = (y - GRASS_END) / (DARK_GRASS_END - GRASS_END)
+      r = lerp(grassColor.r, darkGrassColor.r, t) + colorNoise * 0.3
+      g = lerp(grassColor.g, darkGrassColor.g, t) + colorNoise * 0.2
+      b = lerp(grassColor.b, darkGrassColor.b, t)
+    } else if (y < ROCKY_END) {
+      // Blend from dark grass to rocky
+      const t = (y - DARK_GRASS_END) / (ROCKY_END - DARK_GRASS_END)
+      r = lerp(darkGrassColor.r, rockyColor.r, t) + colorNoise * 0.2
+      g = lerp(darkGrassColor.g, rockyColor.g, t) + colorNoise * 0.1
+      b = lerp(darkGrassColor.b, rockyColor.b, t)
+    } else {
+      // Peak — rocky/gray
+      const t = Math.min(1, (y - ROCKY_END) / 5)
+      r = lerp(rockyColor.r, peakColor.r, t) + colorNoise * 0.1
+      g = lerp(rockyColor.g, peakColor.g, t) + colorNoise * 0.1
+      b = lerp(rockyColor.b, peakColor.b, t)
+    }
+
+    // Clamp to valid range
+    colors.push(
+      Math.max(0, Math.min(1, r)),
+      Math.max(0, Math.min(1, g)),
+      Math.max(0, Math.min(1, b)),
+      1, // alpha
+    )
+  }
+
+  ground.setVerticesData(VertexBuffer.ColorKind, colors)
+
+  // Create terrain material — grass texture tiled across the surface,
+  // modulated by vertex colors for height-based tinting (sand/grass/rock).
+  const material = new StandardMaterial('islandMat', scene)
+
+  const grassTex = new Texture('/textures/grass.png', scene)
+  grassTex.uScale = 20
+  grassTex.vScale = 20
+  material.diffuseTexture = grassTex
+
+  // White diffuse lets vertex colors modulate the texture naturally
+  material.diffuseColor = new Color3(1, 1, 1)
+  material.specularColor = new Color3(0.1, 0.1, 0.1)
+
+  ground.material = material
   ground.receiveShadows = true
 
   return ground as unknown as Mesh
-}
-
-/**
- * Create a procedural terrain texture (green grass with brown patches).
- */
-function createTerrainTexture(scene: Scene): DynamicTexture {
-  const size = 512
-  const texture = new DynamicTexture('terrainTex', size, scene, true)
-  const ctx = texture.getContext()
-
-  // Base green
-  ctx.fillStyle = '#3a7d44'
-  ctx.fillRect(0, 0, size, size)
-
-  // Add noise patches
-  for (let i = 0; i < 2000; i++) {
-    const x = Math.random() * size
-    const y = Math.random() * size
-    const r = Math.random() * 4 + 1
-
-    // Mix of greens and browns
-    const colors = ['#4a8d54', '#2d6b35', '#5a9d64', '#6b5b3a', '#4a7d44', '#3a6d34']
-    ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)]
-    ctx.beginPath()
-    ctx.arc(x, y, r, 0, Math.PI * 2)
-    ctx.fill()
-  }
-
-  texture.update()
-  return texture
 }

@@ -2,12 +2,12 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Copy root workspace files
-COPY package.json package-lock.json ./
+COPY package.json ./
 COPY apps/server/package.json ./apps/server/
 COPY packages/shared/package.json ./packages/shared/
 
 # Install dependencies
-RUN npm ci --workspace=@wol/server --workspace=@wol/shared
+RUN npm install --workspace=@wol/server --workspace=@wol/shared
 
 # Copy source
 COPY packages/shared/ ./packages/shared/

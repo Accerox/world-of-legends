@@ -1,0 +1,12 @@
+name = "wol-assets"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+[[r2_buckets]]
+binding = "ASSETS"
+bucket_name = "wol-assets"
+
+[env.production]
+routes = [
+  { pattern = "assets-wol.raregames.io", custom_domain = true }
+]

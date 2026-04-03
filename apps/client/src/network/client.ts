@@ -1,14 +1,30 @@
-import type { PlayerState, ChatMessage, GameState, ServerMessage } from '../types.js'
+import type { PlayerState, ChatMessage, GameState, ServerMessage, NPC, Quest, PlayerQuestState, ClientMessage } from '../types.js'
 
 /**
  * Callbacks for network events.
  */
 export interface NetworkCallbacks {
-  onStateUpdate: (state: { players: PlayerState[]; chat: ChatMessage[] }) => void
+  onStateUpdate: (state: { players: PlayerState[]; chat: ChatMessage[]; npcs: NPC[] }) => void
   onChatMessage: (msg: ChatMessage) => void
   onPlayerJoined: (player: PlayerState) => void
   onPlayerLeft: (id: string) => void
   onDisconnect: () => void
+  // Combat events
+  onDamage: (data: { targetId: string; damage: number; remainingHealth: number; attackerId: string }) => void
+  onNpcDied: (data: { npcId: string; killerId: string }) => void
+  onPlayerDamage: (data: { playerId: string; damage: number; remainingHealth: number; sourceId: string }) => void
+  onPlayerDied: (data: { playerId: string }) => void
+  onPlayerRespawn: (data: { playerId: string; x: number; y: number; z: number; health: number }) => void
+  onNpcRespawn: (data: { npcId: string; health: number }) => void
+   // Quest events
+  onQuestAccepted: (data: { questId: string }) => void
+  onQuestUpdate: (data: { quests: any[] }) => void
+  onQuestProgress: (data: { questId: string; objectiveIndex: number; current: number; required: number }) => void
+  onQuestComplete: (data: { questId: string; rewards: { xp: number; gold: number } }) => void
+  onLevelUp: (data: { playerId: string; newLevel: number; newMaxHealth: number }) => void
+  // Dialogue events
+  onDialogue: (data: { npcId: string; npcName: string; lines: string[]; questId?: string }) => void
+  onQuestAvailable: (data: { quest: Quest }) => void
 }
 
 /**
@@ -17,7 +33,15 @@ export interface NetworkCallbacks {
 export interface JoinResult {
   playerId: string
   username: string
+  race: string
+  className: string
+  level: number
+  characterId?: string
+  playerCount: number
+  maxPlayers: number
   gameState: GameState
+  quests: Quest[]
+  playerQuests: PlayerQuestState[]
 }
 
 /**
@@ -31,8 +55,9 @@ export class NetworkClient {
 
   /**
    * Connect to the server and join the game.
+   * Supports both legacy (username) and auth (token + characterId) modes.
    */
-  connect(serverUrl: string, username: string): Promise<JoinResult> {
+  connect(serverUrl: string, tokenOrUsername: string, characterId?: string): Promise<JoinResult> {
     return new Promise((resolve, reject) => {
       try {
         this.ws = new WebSocket(serverUrl)
@@ -48,7 +73,13 @@ export class NetworkClient {
 
       this.ws.onopen = () => {
         // Send join message once connected
-        this.ws!.send(JSON.stringify({ type: 'join', username }))
+        if (characterId) {
+          // Auth mode: send token + characterId
+          this.ws!.send(JSON.stringify({ type: 'join', token: tokenOrUsername, characterId }))
+        } else {
+          // Legacy mode: send username
+          this.ws!.send(JSON.stringify({ type: 'join', username: tokenOrUsername }))
+        }
       }
 
       this.ws.onmessage = (event) => {
@@ -62,7 +93,15 @@ export class NetworkClient {
               resolve({
                 playerId: msg.playerId,
                 username: msg.username,
+                race: msg.race ?? 'human',
+                className: msg.className ?? 'guardian',
+                level: msg.level ?? 1,
+                characterId: msg.characterId,
+                playerCount: msg.playerCount,
+                maxPlayers: msg.maxPlayers,
                 gameState: msg.gameState,
+                quests: msg.quests ?? [],
+                playerQuests: msg.playerQuests ?? [],
               })
               break
 
@@ -80,6 +119,61 @@ export class NetworkClient {
 
             case 'player_left':
               this.callbacks.onPlayerLeft?.(msg.playerId)
+              break
+
+            // ─── Combat events ──────────────────────────────────────────────
+            case 'damage':
+              this.callbacks.onDamage?.({ targetId: msg.targetId, damage: msg.damage, remainingHealth: msg.remainingHealth, attackerId: msg.attackerId })
+              break
+
+            case 'npc_died':
+              this.callbacks.onNpcDied?.({ npcId: msg.npcId, killerId: msg.killerId })
+              break
+
+            case 'player_damage':
+              this.callbacks.onPlayerDamage?.({ playerId: msg.playerId, damage: msg.damage, remainingHealth: msg.remainingHealth, sourceId: msg.sourceId })
+              break
+
+            case 'player_died':
+              this.callbacks.onPlayerDied?.({ playerId: msg.playerId })
+              break
+
+            case 'player_respawn':
+              this.callbacks.onPlayerRespawn?.({ playerId: msg.playerId, x: msg.x, y: msg.y, z: msg.z, health: msg.health })
+              break
+
+            case 'npc_respawn':
+              this.callbacks.onNpcRespawn?.({ npcId: msg.npcId, health: msg.health })
+              break
+
+            // ─── Quest events ───────────────────────────────────────────────
+            case 'quest_accepted':
+              this.callbacks.onQuestAccepted?.({ questId: msg.questId })
+              break
+
+            case 'quest_update':
+              this.callbacks.onQuestUpdate?.({ quests: msg.quests })
+              break
+
+            case 'quest_progress':
+              this.callbacks.onQuestProgress?.({ questId: msg.questId, objectiveIndex: msg.objectiveIndex, current: msg.current, required: msg.required })
+              break
+
+            case 'quest_complete':
+              this.callbacks.onQuestComplete?.({ questId: msg.questId, rewards: msg.rewards })
+              break
+
+            case 'level_up':
+              this.callbacks.onLevelUp?.({ playerId: msg.playerId, newLevel: msg.newLevel, newMaxHealth: msg.newMaxHealth })
+              break
+
+            // ─── Dialogue events ────────────────────────────────────────────
+            case 'dialogue':
+              this.callbacks.onDialogue?.({ npcId: msg.npcId, npcName: msg.npcName, lines: msg.lines, questId: msg.questId })
+              break
+
+            case 'quest_available':
+              this.callbacks.onQuestAvailable?.({ quest: msg.quest })
               break
 
             case 'error':
@@ -138,6 +232,42 @@ export class NetworkClient {
   sendChat(message: string): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: 'chat', message }))
+    }
+  }
+
+  /**
+   * Send an attack command targeting an NPC or entity.
+   */
+  sendAttack(targetId: string): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: 'attack', targetId }))
+    }
+  }
+
+  /**
+   * Send an interact command (talk to NPC).
+   */
+  sendInteract(targetId: string): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: 'interact', targetId }))
+    }
+  }
+
+  /**
+   * Send a quest accept command.
+   */
+  sendAcceptQuest(questId: string): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: 'accept_quest', questId }))
+    }
+  }
+
+  /**
+   * Send a raw client message (for extensibility).
+   */
+  sendRaw(msg: ClientMessage): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(msg))
     }
   }
 
