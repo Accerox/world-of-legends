@@ -134,14 +134,14 @@ export function createFollowCamera(
     lastPlayerZ = target.position.z
     lastPlayerRotY = target.rotation.y
 
-    // Terrain collision: zoom in to avoid going underground
+    // Keep camera at desired distance (only scroll changes it)
+    camera.radius = desiredRadius
+
+    // Terrain collision: temporarily zoom in
     const camPos = camera.position
     const terrainH = getHeightAtPosition(camPos.x, camPos.z) + 0.8
-
     if (camPos.y < terrainH) {
       camera.radius = Math.max(camera.lowerRadiusLimit, camera.radius * 0.85)
-    } else if (camera.radius < desiredRadius - 0.5) {
-      camera.radius += (desiredRadius - camera.radius) * 0.05
     }
   })
 
