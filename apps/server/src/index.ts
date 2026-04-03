@@ -22,6 +22,7 @@ app.use(
     origin: [
       'http://localhost:3000',
       'http://localhost:5173',
+      'http://192.168.0.204:5173',
       'https://wol.raregames.io',
       'https://wol-game.pages.dev',
     ],
