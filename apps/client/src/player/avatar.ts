@@ -55,8 +55,8 @@ export async function createAnimatedAvatar(
   const raceUrl = `${ASSETS_URL}/models/races/`
   const animUrl = `${ASSETS_URL}/models/animations/`
 
+  // Standard animation sources — each is a complete model+animation GLB
   const animSources: { name: string; url: string; file: string; loop: boolean; speed: number }[] = [
-    { name: 'Idle', url: animUrl, file: 'idle.glb', loop: true, speed: 1.0 },
     { name: 'Walking', url: raceUrl, file: `${race}-walk.glb`, loop: true, speed: 1.0 },
     { name: 'Running', url: raceUrl, file: `${race}-run.glb`, loop: true, speed: 1.0 },
     { name: 'WalkingBack', url: raceUrl, file: `${race}-walk.glb`, loop: true, speed: -1.0 },
@@ -79,7 +79,74 @@ export async function createAnimatedAvatar(
   const slots: Map<string, AnimSlot> = new Map()
   let currentSlot: string = ''
 
-  // Load and instantiate each animation
+  // ─── Special Idle slot: race model + idle animation retargeted ───────────────
+  // Load the race model (correct appearance) and the idle animation (from shared GLB).
+  // Since all Meshy models share the same 24-bone Mixamo skeleton, the animation
+  // from idle.glb can be applied directly to the race model's skeleton.
+  const raceContainer = await loadContainer(scene, raceUrl, `${race}-rigged.glb`)
+  const idleAnimContainer = await loadContainer(scene, animUrl, 'idle.glb')
+
+  if (raceContainer) {
+    const raceInstance = raceContainer.instantiateModelsToScene(
+      (name) => `${name}_Idle_${playerId}`,
+      false,
+    )
+    const raceRoot = raceInstance.rootNodes[0] as TransformNode
+    raceRoot.parent = modelPivot
+    raceRoot.scaling = new Vector3(1, 1, 1)
+    raceRoot.setEnabled(false)
+
+    // Try to retarget idle animation onto the race model's skeleton
+    let idleAnim: AnimationGroup | null = null
+    if (idleAnimContainer) {
+      // Instantiate idle.glb just to get its animation group
+      const idleInstance = idleAnimContainer.instantiateModelsToScene(
+        (name) => `${name}_IdleAnim_${playerId}`,
+        false,
+      )
+      const idleAnimGroup = idleInstance.animationGroups[0] || null
+
+      if (idleAnimGroup) {
+        // Clone the animation and retarget it to the race model's skeleton bones
+        // Both use the same Mixamo bone names, so we match by name
+        const cloned = idleAnimGroup.clone(`idle_retarget_${playerId}`)
+
+        // Map animation targets from idle model bones to race model bones by name
+        const raceBones = new Map<string, TransformNode>()
+        raceRoot.getChildTransformNodes(false).forEach((node) => {
+          // Strip the instance suffix to get the base bone name
+          const baseName = node.name.replace(`_Idle_${playerId}`, '')
+          raceBones.set(baseName, node)
+        })
+
+        for (const anim of cloned.targetedAnimations) {
+          const targetName = (anim.target as TransformNode).name?.replace(`_IdleAnim_${playerId}`, '') || ''
+          const raceTarget = raceBones.get(targetName)
+          if (raceTarget) {
+            anim.target = raceTarget
+          }
+        }
+
+        idleAnim = cloned
+        idleAnim.stop()
+
+        // Hide the idle model instance (we only needed its animation)
+        for (const node of idleInstance.rootNodes) {
+          (node as TransformNode).dispose(false, true)
+        }
+        idleAnimGroup.dispose()
+      }
+    }
+
+    slots.set('Idle', {
+      rootNode: raceRoot,
+      animGroup: idleAnim,
+      loop: true,
+      speed: 1.0,
+    })
+  }
+
+  // ─── Standard animation slots ───────────────────────────────────────────────
   for (const src of animSources) {
     const container = await loadContainer(scene, src.url, src.file)
     if (!container) continue
