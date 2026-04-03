@@ -49,7 +49,7 @@ export async function createAnimatedAvatar(
   const root = new TransformNode(`avatar_root_${playerId}`, scene)
   const modelPivot = new TransformNode(`avatar_pivot_${playerId}`, scene)
   modelPivot.parent = root
-  modelPivot.rotation.y = 0 // GLB models face +Z (glTF convention), same as game forward
+  modelPivot.rotation.y = Math.PI // Meshy/Mixamo models face -Z, rotate to match game +Z forward
 
   // Load all animation GLBs — each has its own model + animation
   const raceUrl = `${ASSETS_URL}/models/races/`
@@ -165,7 +165,11 @@ export async function createAnimatedAvatar(
     playDance: () => switchTo('Dance'),
 
     setVisualYaw: (angle: number) => {
-      const diff = angle - modelPivot.rotation.y
+      // angle is relative offset (0=forward, PI/4=diagonal, etc.)
+      // modelPivot base is Math.PI (to flip -Z facing models to +Z)
+      // so target = PI + angle
+      const target = Math.PI + angle
+      const diff = target - modelPivot.rotation.y
       modelPivot.rotation.y += diff * 0.2
     },
 
